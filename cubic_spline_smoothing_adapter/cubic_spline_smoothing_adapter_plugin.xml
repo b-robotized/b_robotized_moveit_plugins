@@ -1,0 +1,11 @@
+<library path="cubic_spline_smoothing_adapter">
+  <!--if adding other plugins here, keep b_robotized_moveit_plugins as the first name -->
+  <class name="b_robotized_moveit_plugins/CubicSplineSmoothingAdapter" 
+         type="cubic_spline_smoothing_adapter::CubicSplineSmoothingAdapter" 
+         base_class_type="planning_interface::PlanningResponseAdapter">
+    <description>
+      Re-calculating vel/acc of trajectories from moveit based on cubic splines. Developed for PILZ LIN!
+    </description>
+  </class>
+
+</library>
