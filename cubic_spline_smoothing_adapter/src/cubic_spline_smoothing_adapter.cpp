@@ -257,7 +257,8 @@ public:
     };
     fitAllSplines();
 
-    double k_req = 1.0;
+    std::vector<double> segment_time_stretch_factor(num_segments, 1.0);
+    
     for (size_t s = 0; s < num_segments; ++s) {
       for (size_t i = seam_indices[s]; i < seam_indices[s + 1]; ++i) {
         double h = times[i+1] - times[i];
@@ -272,24 +273,43 @@ public:
           double k_acc = std::sqrt(std::abs(peaks.max_acc_pos) / limits.a_max[j]);
           double k_dec = std::sqrt(std::abs(peaks.max_acc_neg) / std::abs(limits.a_min[j]));
           
-          k_req = std::max({k_req, k_vel, k_acc, k_dec});
+          segment_time_stretch_factor[s] = std::max({segment_time_stretch_factor[s], k_vel, k_acc, k_dec});
+        }
+      }
+      
+      if (segment_time_stretch_factor[s] > config_.max_time_stretch) {
+        RCLCPP_ERROR(logger_, "Section %zu required time dilation (%f) exceeds max allowed (%f).", s, segment_time_stretch_factor[s], config_.max_time_stretch);
+        res.error_code.val = moveit_msgs::msg::MoveItErrorCodes::FAILURE;
+        return;
+      }
+    }
+
+    bool needs_time_stretch = false;
+    double current_time = 0.0;
+    std::vector<double> original_times = times; 
+
+    for (size_t s = 0; s < num_segments; ++s) {
+      double k = segment_time_stretch_factor[s];
+      if (k > 1.0001) needs_time_stretch = true;
+
+      for (size_t i = seam_indices[s]; i < seam_indices[s + 1]; ++i) {
+        times[i] = current_time;
+        current_time += (original_times[i + 1] - original_times[i]) * k;
+        
+        if (k > 1.0001) {
+          for (size_t j = 0; j < num_joints; ++j) {
+             velocities[j][i] /= k; 
+          }
         }
       }
     }
 
-    if (k_req > config_.max_time_stretch) {
-      RCLCPP_ERROR(logger_, "Required time dilation (%f) exceeds max allowed (%f).", k_req, config_.max_time_stretch);
-      res.error_code.val = moveit_msgs::msg::MoveItErrorCodes::FAILURE;
-      return;
+    times.back() = current_time;
+    if (segment_time_stretch_factor.back() > 1.0001) {
+      for (size_t j = 0; j < num_joints; ++j) velocities[j].back() /= segment_time_stretch_factor.back();
     }
 
-    if (k_req > 1.0001) {
-      for (double& t : times) t *= k_req;
-      for (auto& v_joint : velocities) {
-        for (double& v : v_joint) v /= k_req;
-      }
-      fitAllSplines();
-    }
+    if (needs_time_stretch) fitAllSplines();
 
     std::vector<double> log_v(num_joints, 0.0), log_a(num_joints, 0.0), log_d(num_joints, 0.0), log_dev(num_joints, 0.0);
     for (size_t s = 0; s < num_segments; ++s) {
@@ -344,8 +364,12 @@ public:
 
     std::vector<std::string> j_names = group->getActiveJointModelNames();
     RCLCPP_INFO(logger_, "--- Spline Smoothing Complete ---");
-    if (k_req > 1.0001) {
-      RCLCPP_WARN(logger_, "Time dilated by: %.2f%%", (k_req - 1.0) * 100.0);
+    if (needs_time_stretch) {
+      for (size_t s = 0; s < num_segments; ++s) {
+        if (segment_time_stretch_factor[s] > 1.0001) {
+          RCLCPP_WARN(logger_, "Section %zu time dilated by: %.2f%%", s, (segment_time_stretch_factor[s] - 1.0) * 100.0);
+        }
+      }
     }
     RCLCPP_INFO_STREAM(logger_, "Peak Vels [rad/s]:   " << formatLog(j_names, log_v));
     RCLCPP_INFO_STREAM(logger_, "Peak Accs [rad/s^2]: " << formatLog(j_names, log_a));
