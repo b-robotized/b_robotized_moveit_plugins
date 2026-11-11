@@ -13,7 +13,8 @@
 # See https://github.com/pre-commit/pre-commit
 
 # files that should be ignored globally
-exclude: ^(docs/_themes/)|^(docs/_templates/)
+# spline.h is vendored tk::spline (Tino Kluge, GPL-2+) and stays identical to upstream
+exclude: ^(docs/_themes/)|^(docs/_templates/)|^cubic_spline_smoothing_adapter/include/cubic_spline_smoothing_adapter/spline\.h$
 
 
 repos:
