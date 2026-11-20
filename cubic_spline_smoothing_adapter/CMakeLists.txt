@@ -18,8 +18,8 @@ add_library(cubic_spline_smoothing_adapter SHARED
 target_include_directories(cubic_spline_smoothing_adapter PUBLIC include)
 target_link_libraries(cubic_spline_smoothing_adapter cubic_spline_smoothing)
 ament_target_dependencies(cubic_spline_smoothing_adapter
-  moveit_core 
-  pluginlib 
+  moveit_core
+  pluginlib
   rclcpp
 )
 
